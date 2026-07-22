@@ -8,8 +8,9 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- THREE.JS STABİL SÜRÜM -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #0f172a; font-family: 'Arial', sans-serif; }
         canvas { display: block; }
@@ -76,7 +77,7 @@
                     'models/Bugsyfish.glb', 'models/Rozyfish.glb', 'models/Elifish.glb', 'models/Mirfish_3D.glb'
                 ];
 
-                // 2. Ortam Modelleri ve Haritadaki Konumları (X, Z, Ölçek, Çarpışma Boyutu)
+                // 2. Ortam Modelleri ve Haritadaki Konumları
                 const envSpawnList = [
                     { name: 'shipwreck.glb', x: 25, z: 25, scale: 3, radius: 8 },
                     { name: 'ancient_ruin.glb', x: -25, z: 30, scale: 2, radius: 6 },
@@ -98,7 +99,7 @@
                     { name: 'seabed.glb', x: -35, z: 35, scale: 2, radius: 5 }
                 ];
 
-                let totalToLoad = fishModels.length + envSpawnList.length; // Toplam 25 model
+                let totalToLoad = fishModels.length + envSpawnList.length;
                 let currentLoaded = 0;
 
                 const onAssetLoad = () => {
@@ -110,7 +111,6 @@
                     }
                 };
 
-                // Balıkları Yükle
                 const createFish = (model, isPlayer) => {
                     model.scale.set(2, 2, 2);
                     model.position.set((Math.random() - 0.5) * 10, 2, (Math.random() - 0.5) * 10);
@@ -137,14 +137,13 @@
                     });
                 });
 
-                // Ortam Objelerini Yükle ve Yerleştir
                 envSpawnList.forEach(item => {
                     loader.load(`models/environment/${item.name}`, (gltf) => {
                         const model = gltf.scene;
                         model.position.set(item.x, 0, item.z);
                         model.scale.set(item.scale, item.scale, item.scale);
                         model.isFloor = false;
-                        model.collisionRadius = item.radius; // Dinamik çarpışma alanı!
+                        model.collisionRadius = item.radius;
                         model.traverse(child => { 
                             if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } 
                         });
@@ -191,7 +190,7 @@
                             const checkCollision = (newX, newZ) => {
                                 for (let obj of solidObjects) {
                                     if (obj.isFloor) continue; 
-                                    const radius = obj.collisionRadius || 5; // Objenin özel çarpışma boyutu
+                                    const radius = obj.collisionRadius || 5;
                                     const dist = Math.sqrt(Math.pow(newX - obj.position.x, 2) + Math.pow(newZ - obj.position.z, 2));
                                     if (dist < radius) return true;
                                 }
