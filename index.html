@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Sea Mystery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/three@0.140.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.140.0/examples/js/loaders/GLTFLoader.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0f172a; font-family: 'Arial', sans-serif; }
+        canvas { display: block; }
+        .ui-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            const [gameStarted, setGameStarted] = useState(false);
+            const [isDead, setIsDead] = useState(false);
+            const [timer, setTimer] = useState(60);
+            const [showRoster, setShowRoster] = useState(true);
+            const [loading, setLoading] = useState(true);
+            const [roster, setRoster] = useState([]);
+            
+            const mountRef = useRef(null);
+            const gameStateRef = useRef({
+                scene: null, camera: null, renderer: null,
+                player: null, bots: [], solidObjects: [],
+                keys: {}, escapeVortex: null, time: 0
+            });
+
+            useEffect(() => {
+                if (!gameStarted) return;
+
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x0f172a);
+                scene.fog = new THREE.Fog(0x0f172a, 20, 80);
+
+                const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                mountRef.current.appendChild(renderer.domElement);
+
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+                scene.add(ambientLight);
+                const directionalLight = new THREE.DirectionalLight(0x00ffff, 0.8);
+                directionalLight.position.set(0, 50, 0);
+                directionalLight.castShadow = true;
+                scene.add(directionalLight);
+
+                const floorGeo = new THREE.PlaneGeometry(200, 200);
+                const floorMat = new THREE.MeshStandardMaterial({ color: 0xc2b280 });
+                const floor = new THREE.Mesh(floorGeo, floorMat);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                floor.isFloor = true; 
+                scene.add(floor);
+                gameStateRef.current.solidObjects.push(floor);
+
+                // MODEL YÜKLEYİCİ
+                const loader = new THREE.GLTFLoader();
+                
+                // 1. Balık Modelleri
+                const fishModels = [
+                    'models/Sinfish.glb', 'models/Ninfish_3D.glb', 'models/Pinkfish.glb', 
+                    'models/Bugsyfish.glb', 'models/Rozyfish.glb', 'models/Elifish.glb', 'models/Mirfish_3D.glb'
+                ];
+
+                // 2. Ortam Modelleri ve Haritadaki Konumları (X, Z, Ölçek, Çarpışma Boyutu)
+                const envSpawnList = [
+                    { name: 'shipwreck.glb', x: 25, z: 25, scale: 3, radius: 8 },
+                    { name: 'ancient_ruin.glb', x: -25, z: 30, scale: 2, radius: 6 },
+                    { name: 'stone_arch.glb', x: 30, z: -20, scale: 2.5, radius: 6 },
+                    { name: 'shark_cage.glb', x: -30, z: -25, scale: 2, radius: 4 },
+                    { name: 'coral_tube.glb', x: 15, z: -35, scale: 2, radius: 4 },
+                    { name: 'coral_tube.glb', x: -10, z: 20, scale: 2, radius: 4 },
+                    { name: 'giant_kelp.glb', x: 20, z: 10, scale: 2, radius: 3 },
+                    { name: 'giant_kelp.glb', x: -15, z: -15, scale: 2, radius: 3 },
+                    { name: 'coral_reef.glb', x: 40, z: 0, scale: 2, radius: 5 },
+                    { name: 'coral_reef.glb', x: -40, z: 10, scale: 2, radius: 5 },
+                    { name: 'sand_dune.glb', x: 0, z: 40, scale: 3, radius: 6 },
+                    { name: 'sand_dune.glb', x: 0, z: -40, scale: 3, radius: 6 },
+                    { name: 'treasure_chest.glb', x: 10, z: 30, scale: 1.5, radius: 3 },
+                    { name: 'treasure_chest.glb', x: -20, z: -30, scale: 1.5, radius: 3 },
+                    { name: 'skeleton.glb', x: 5, z: -20, scale: 1.5, radius: 3 },
+                    { name: 'diving_mask.glb', x: -5, z: 25, scale: 1, radius: 2 },
+                    { name: 'seabed.glb', x: 35, z: -35, scale: 2, radius: 5 },
+                    { name: 'seabed.glb', x: -35, z: 35, scale: 2, radius: 5 }
+                ];
+
+                let totalToLoad = fishModels.length + envSpawnList.length; // Toplam 25 model
+                let currentLoaded = 0;
+
+                const onAssetLoad = () => {
+                    currentLoaded++;
+                    if (currentLoaded === totalToLoad) {
+                        setLoading(false);
+                        assignRoles();
+                        startGameLoop();
+                    }
+                };
+
+                // Balıkları Yükle
+                const createFish = (model, isPlayer) => {
+                    model.scale.set(2, 2, 2);
+                    model.position.set((Math.random() - 0.5) * 10, 2, (Math.random() - 0.5) * 10);
+                    model.isDead = false; 
+                    model.isPredator = false;
+                    model.isProtector = false;
+                    model.traverse(child => { if (child.isMesh) { child.castShadow = true; } });
+                    
+                    if (isPlayer) gameStateRef.current.player = model;
+                    else gameStateRef.current.bots.push(model);
+                    scene.add(model);
+                };
+
+                fishModels.forEach((fishPath, index) => {
+                    loader.load(fishPath, (gltf) => {
+                        createFish(gltf.scene, index === 0);
+                        onAssetLoad();
+                    }, undefined, (err) => {
+                        console.error("Model yüklenemedi:", fishPath, err);
+                        const boxGeo = new THREE.BoxGeometry(2, 1, 3);
+                        const boxMat = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
+                        createFish(new THREE.Mesh(boxGeo, boxMat), index === 0);
+                        onAssetLoad();
+                    });
+                });
+
+                // Ortam Objelerini Yükle ve Yerleştir
+                envSpawnList.forEach(item => {
+                    loader.load(`models/environment/${item.name}`, (gltf) => {
+                        const model = gltf.scene;
+                        model.position.set(item.x, 0, item.z);
+                        model.scale.set(item.scale, item.scale, item.scale);
+                        model.isFloor = false;
+                        model.collisionRadius = item.radius; // Dinamik çarpışma alanı!
+                        model.traverse(child => { 
+                            if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } 
+                        });
+                        scene.add(model);
+                        gameStateRef.current.solidObjects.push(model);
+                        onAssetLoad();
+                    }, undefined, (err) => {
+                        console.error("Ortam modeli yüklenemedi:", item.name, err);
+                        onAssetLoad();
+                    });
+                });
+
+                const assignRoles = () => {
+                    const allFish = [gameStateRef.current.player, ...gameStateRef.current.bots];
+                    allFish.sort(() => Math.random() - 0.5);
+                    allFish[0].isPredator = true;
+                    allFish[1].isProtector = true;
+                    
+                    const newRoster = allFish.map((fish, i) => {
+                        let role = "Masum";
+                        if (fish.isPredator) role = "Katil";
+                        if (fish.isProtector) role = "Şerif";
+                        return { name: `Balık ${i+1}`, role, isDead: false };
+                    });
+                    setRoster(newRoster);
+                };
+
+                let animationId;
+                const startGameLoop = () => {
+                    const animate = () => {
+                        animationId = requestAnimationFrame(animate);
+                        gameStateRef.current.time += 0.05;
+                        const t = gameStateRef.current.time;
+                        const { player, bots, solidObjects, keys } = gameStateRef.current;
+
+                        if (player && !player.isDead) {
+                            const speed = 0.5;
+                            let moveX = 0, moveZ = 0;
+                            if (keys['w']) moveZ -= speed;
+                            if (keys['s']) moveZ += speed;
+                            if (keys['a']) moveX -= speed;
+                            if (keys['d']) moveX += speed;
+
+                            const checkCollision = (newX, newZ) => {
+                                for (let obj of solidObjects) {
+                                    if (obj.isFloor) continue; 
+                                    const radius = obj.collisionRadius || 5; // Objenin özel çarpışma boyutu
+                                    const dist = Math.sqrt(Math.pow(newX - obj.position.x, 2) + Math.pow(newZ - obj.position.z, 2));
+                                    if (dist < radius) return true;
+                                }
+                                return false;
+                            };
+
+                            if (!checkCollision(player.position.x + moveX, player.position.z)) player.position.x += moveX;
+                            if (!checkCollision(player.position.x, player.position.z + moveZ)) player.position.z += moveZ;
+
+                            player.position.y = 2 + Math.sin(t * 2) * 0.5;
+                            if (moveX !== 0 || moveZ !== 0) player.rotation.y = Math.atan2(moveX, moveZ);
+
+                            if (isDead) {
+                                camera.position.lerp(new THREE.Vector3(0, 40, 0.1), 0.1);
+                                camera.lookAt(0, 0, 0);
+                            } else {
+                                camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 15, player.position.z + 20), 0.1);
+                                camera.lookAt(player.position);
+                            }
+                        }
+
+                        bots.forEach(bot => {
+                            if (!bot.isDead) {
+                                bot.position.x += (Math.random() - 0.5) * 0.2;
+                                bot.position.z += (Math.random() - 0.5) * 0.2;
+                                bot.position.y = 2 + Math.sin(t * 2 + bot.position.x) * 0.5;
+                                bot.rotation.y = Math.atan2((Math.random() - 0.5), (Math.random() - 0.5));
+                            }
+                        });
+
+                        renderer.render(scene, camera);
+                    };
+                    animate();
+                };
+
+                const handleKeyDown = (e) => {
+                    gameStateRef.current.keys[e.key.toLowerCase()] = true;
+                    if (e.key.toLowerCase() === 'r') setShowRoster(prev => !prev);
+                };
+                const handleKeyUp = (e) => { gameStateRef.current.keys[e.key.toLowerCase()] = false; };
+                window.addEventListener('keydown', handleKeyDown);
+                window.addEventListener('keyup', handleKeyUp);
+
+                const handleResize = () => {
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                };
+                window.addEventListener('resize', handleResize);
+
+                return () => {
+                    cancelAnimationFrame(animationId);
+                    window.removeEventListener('keydown', handleKeyDown);
+                    window.removeEventListener('keyup', handleKeyUp);
+                    window.removeEventListener('resize', handleResize);
+                    mountRef.current.removeChild(renderer.domElement);
+                };
+            }, [gameStarted]);
+
+            useEffect(() => {
+                if (gameStarted && timer > 0) {
+                    const interval = setInterval(() => setTimer(prev => prev - 1), 1000);
+                    return () => clearInterval(interval);
+                }
+            }, [gameStarted, timer]);
+
+            return (
+                <div>
+                    {loading && gameStarted && (
+                        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-slate-900 text-white text-2xl z-50">
+                            <div className="animate-pulse">Harita ve Balıklar Yükleniyor...</div>
+                        </div>
+                    )}
+                    
+                    {!gameStarted ? (
+                        <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white z-50">
+                            <h1 className="text-5xl font-bold mb-8 text-cyan-400">Deep Sea Mystery</h1>
+                            <button 
+                                className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-8 rounded-full text-xl transition-all"
+                                onClick={() => setGameStarted(true)}
+                            >
+                                Oyna
+                            </button>
+                            <p className="mt-4 text-slate-400">WASD ile yüzin, R ile listeyi açın.</p>
+                        </div>
+                    ) : (
+                        <>
+                            <div ref={mountRef} className="absolute top-0 left-0 w-full h-full"></div>
+                            <div className="ui-overlay">
+                                <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white px-6 py-2 rounded-full text-2xl font-bold">
+                                    {timer}s
+                                </div>
+                                
+                                {showRoster && (
+                                    <div className="absolute top-4 right-4 bg-black/50 text-white p-4 rounded-lg w-64">
+                                        <h2 className="font-bold mb-2 border-b border-slate-600 pb-1">Balıklar (R)</h2>
+                                        <ul>
+                                            {roster.map((fish, i) => (
+                                                <li key={i} className={`flex justify-between ${fish.isDead ? 'text-red-500 line-through' : 'text-green-400'}`}>
+                                                    <span>{fish.name}</span>
+                                                    <span className="text-xs opacity-70">{fish.role}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
