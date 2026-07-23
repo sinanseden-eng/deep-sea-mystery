@@ -81,9 +81,11 @@
 
                 // Odalar arasındaki boşlukta hiç zemin yoktu (versiyon 2'de zemin tamamen
                 // kaldırılmış), yani oyuncu geçişlerde koyu bir boşlukta yüzüyor gibi görünüyordu.
-                // Bütün alanı kaplayan alçak bir kum zemin geri eklendi.
+                // Bütün alanı kaplayan alçak bir zemin geri eklendi — rengi artık kaki/sarı değil,
+                // bg1.jpg'nin kendi kumsal bölgesinden örneklenen gri-mavi ton (#7b8389),
+                // fotoğrafla çok daha doğal karışıyor.
                 const floorGeo = new THREE.PlaneGeometry(240, 240);
-                const floorMat = new THREE.MeshStandardMaterial({ color: 0xc2b280 });
+                const floorMat = new THREE.MeshStandardMaterial({ color: 0x7b8389, roughness: 1 });
                 const floor = new THREE.Mesh(floorGeo, floorMat);
                 floor.rotation.x = -Math.PI / 2;
                 floor.position.y = -0.1;
@@ -93,6 +95,14 @@
                 gameStateRef.current.solidObjects.push(floor);
 
                 const loader = new THREE.GLTFLoader();
+
+                // Oda duvarları için gerçek üçgen-bazlı çarpışma: dairesel collision bir
+                // odanın karmaşık şeklini (kapı boşlukları dahil) temsil edemiyordu, bu yüzden
+                // önceden radius:0 ile tüm oda çarpışması kapatılmıştı. Şimdi oda modellerinin
+                // kendi mesh'lerine karşı ışın (ray) atarak gerçek duvarlara çarpma, boşluklardan
+                // geçme sağlanıyor.
+                const wallMeshes = [];
+                const wallRaycaster = new THREE.Raycaster();
                 
                 const fishModels = [
                     { path: 'models/Sinfish.glb', name: 'Sinfish' },
@@ -191,7 +201,14 @@
                         model.isFloor = false;
                         model.collisionRadius = item.radius;
                         model.traverse(child => { 
-                            if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } 
+                            if (child.isMesh) {
+                                child.castShadow = true;
+                                child.receiveShadow = true;
+                                // radius:0 olan girişler (oda modelleri) gerçek duvar çarpışması
+                                // için mesh listesine ekleniyor — dairesel collision yerine
+                                // ışın atarak gerçek geometriye (kapı boşlukları dahil) bakılıyor.
+                                if (item.radius === 0) wallMeshes.push(child);
+                            }
                         });
                         scene.add(model);
                         gameStateRef.current.solidObjects.push(model);
@@ -248,6 +265,21 @@
                                     const dist = Math.sqrt(Math.pow(newX - obj.position.x, 2) + Math.pow(newZ - obj.position.z, 2));
                                     if (dist < radius) return true;
                                 }
+                                // Oda duvarları: gerçek geometriye ışın atarak kontrol et,
+                                // böylece sadece kapı/delik olan yerlerden geçilebiliyor.
+                                if (wallMeshes.length > 0) {
+                                    const dx = newX - player.position.x;
+                                    const dz = newZ - player.position.z;
+                                    const dist = Math.sqrt(dx * dx + dz * dz);
+                                    if (dist > 0.0001) {
+                                        wallRaycaster.set(
+                                            new THREE.Vector3(player.position.x, player.position.y, player.position.z),
+                                            new THREE.Vector3(dx, 0, dz).normalize()
+                                        );
+                                        wallRaycaster.far = dist + 0.4;
+                                        if (wallRaycaster.intersectObjects(wallMeshes, false).length > 0) return true;
+                                    }
+                                }
                                 return false;
                             };
 
@@ -294,6 +326,18 @@
                                     if (dist < obj.collisionRadius) {
                                         blocked = true;
                                         break;
+                                    }
+                                }
+
+                                if (!blocked && wallMeshes.length > 0) {
+                                    const stepDist = Math.sqrt(moveX * moveX + moveZ * moveZ);
+                                    if (stepDist > 0.0001) {
+                                        wallRaycaster.set(
+                                            new THREE.Vector3(bot.position.x, bot.position.y, bot.position.z),
+                                            new THREE.Vector3(moveX, 0, moveZ).normalize()
+                                        );
+                                        wallRaycaster.far = stepDist + 0.4;
+                                        if (wallRaycaster.intersectObjects(wallMeshes, false).length > 0) blocked = true;
                                     }
                                 }
 
