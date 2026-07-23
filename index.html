@@ -35,19 +35,23 @@
             const [showRoster, setShowRoster] = useState(true);
             const [loading, setLoading] = useState(true);
             const [roster, setRoster] = useState([]);
+            const [difficulty, setDifficulty] = useState('Orta');
+            const [gameDuration, setGameDuration] = useState(60);
+            const [gameOver, setGameOver] = useState(false);
+            const [winner, setWinner] = useState('');
             
             const mountRef = useRef(null);
             const gameStateRef = useRef({
                 scene: null, camera: null, renderer: null,
                 player: null, bots: [], solidObjects: [],
-                keys: {}, escapeVortex: null, time: 0
+                keys: {}, time: 0, botSpeed: 0.1
             });
 
             useEffect(() => {
                 if (!gameStarted) return;
 
                 const scene = new THREE.Scene();
-                scene.fog = new THREE.Fog(0x1a3a5a, 50, 180);
+                scene.fog = new THREE.Fog(0x1a3a5a, 60, 200); // Sis uzaklaştırıldı (Daha geniş alan için)
 
                 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 
@@ -65,9 +69,6 @@
                 sunLight.castShadow = true;
                 scene.add(sunLight);
 
-                // 3D ZEMİN (TABAKA) TAMAMEN KALDIRILDI!
-                // Artık balıklar ve objeler doğrudan arka plan resminin üzerinde duracak.
-
                 const loader = new THREE.GLTFLoader();
                 
                 const fishModels = [
@@ -80,22 +81,23 @@
                     { path: 'models/Mirfish_3D.glb', name: 'Mirfish' }
                 ];
 
+                // Objeler ve Odalar Büyütüldü (Scale 3 ve 6 yapıldı)
                 const envSpawnList = [
-                    { name: 'temple_room.glb', x: 0, z: 0, scale: 3, radius: 0 },
-                    { name: 'ship_hull.glb', x: -35, z: 10, scale: 3, radius: 0 },
-                    { name: 'coral_cave.glb', x: 35, z: 10, scale: 3, radius: 0 },
-                    { name: 'submarine_section.glb', x: 0, z: -40, scale: 3, radius: 0 },
+                    { name: 'temple_room.glb', x: 0, z: 0, scale: 6, radius: 0 },
+                    { name: 'ship_hull.glb', x: -40, z: 15, scale: 6, radius: 0 },
+                    { name: 'coral_cave.glb', x: 40, z: 15, scale: 6, radius: 0 },
+                    { name: 'submarine_section.glb', x: 0, z: -45, scale: 6, radius: 0 },
                     
-                    { name: 'treasure_chest.glb', x: 5, z: 5, scale: 1.5, radius: 3 },
-                    { name: 'treasure_chest.glb', x: -30, z: 15, scale: 1.5, radius: 3 },
-                    { name: 'diving_mask.glb', x: -5, z: -5, scale: 1, radius: 2 },
-                    { name: 'skeleton.glb', x: 30, z: 5, scale: 1.5, radius: 3 },
-                    { name: 'giant_kelp.glb', x: 15, z: -20, scale: 2, radius: 2 },
-                    { name: 'giant_kelp.glb', x: -15, z: -20, scale: 2, radius: 2 },
-                    { name: 'coral_reef.glb', x: 45, z: -20, scale: 2, radius: 4 },
-                    { name: 'coral_reef.glb', x: -45, z: -20, scale: 2, radius: 4 },
-                    { name: 'coral_tube.glb', x: 20, z: 30, scale: 2, radius: 3 },
-                    { name: 'coral_tube.glb', x: -20, z: 30, scale: 2, radius: 3 }
+                    { name: 'treasure_chest.glb', x: 5, z: 5, scale: 3, radius: 4 },
+                    { name: 'treasure_chest.glb', x: -35, z: 20, scale: 3, radius: 4 },
+                    { name: 'diving_mask.glb', x: -5, z: -5, scale: 2, radius: 2 },
+                    { name: 'skeleton.glb', x: 35, z: 5, scale: 3, radius: 4 },
+                    { name: 'giant_kelp.glb', x: 15, z: -25, scale: 4, radius: 2 },
+                    { name: 'giant_kelp.glb', x: -15, z: -25, scale: 4, radius: 2 },
+                    { name: 'coral_reef.glb', x: 50, z: -20, scale: 4, radius: 5 },
+                    { name: 'coral_reef.glb', x: -50, z: -20, scale: 4, radius: 5 },
+                    { name: 'coral_tube.glb', x: 25, z: 35, scale: 4, radius: 4 },
+                    { name: 'coral_tube.glb', x: -25, z: 35, scale: 4, radius: 4 }
                 ];
 
                 let totalToLoad = fishModels.length + envSpawnList.length;
@@ -111,8 +113,8 @@
                 };
 
                 const createFish = (model, isPlayer, fishName) => {
-                    model.scale.set(2, 2, 2);
-                    model.position.set((Math.random() - 0.5) * 10 + 15, 3, 20);
+                    model.scale.set(3, 3, 3); // Balıklar büyütüldü
+                    model.position.set((Math.random() - 0.5) * 20 + 20, 3, 30);
                     model.isDead = false; 
                     model.isPredator = false;
                     model.isProtector = false;
@@ -163,16 +165,17 @@
                 });
 
                 const assignRoles = () => {
-                    const allFish = [gameStateRef.current.player, ...gameStateRef.current.bots];
-                    allFish.sort(() => Math.random() - 0.5);
-                    allFish[0].isPredator = true;
-                    allFish[1].isProtector = true;
+                    const player = gameStateRef.current.player;
+                    player.isPredator = false; // Oyuncu daima masum (hayatta kalmaya çalışıyor)
+                    player.isProtector = false;
                     
-                    const newRoster = allFish.map((fish) => {
-                        let role = "Masum";
-                        if (fish.isPredator) role = "Katil";
-                        if (fish.isProtector) role = "Şerif";
-                        return { name: fish.fishName, role, isDead: false };
+                    const bots = [...gameStateRef.current.bots];
+                    bots.sort(() => Math.random() - 0.5);
+                    bots[0].isPredator = true; // Botlardan biri gizli katil
+                    bots[1].isProtector = true;
+                    
+                    const newRoster = [player, ...bots].map((fish) => {
+                        return { name: fish.fishName, isDead: false };
                     });
                     setRoster(newRoster);
                 };
@@ -185,8 +188,12 @@
                         const t = gameStateRef.current.time;
                         const { player, bots, solidObjects, keys } = gameStateRef.current;
 
-                        if (player && !player.isDead) {
-                            const speed = 0.3;
+                        // Zorluk seviyesine göre bot hızı
+                        const botSpeeds = { 'Kolay': 0.05, 'Orta': 0.1, 'Zor': 0.2, 'İmkansız': 0.35 };
+                        const currentBotSpeed = botSpeeds[difficulty];
+
+                        if (player && !player.isDead && !gameOver) {
+                            const speed = 0.4;
                             let moveX = 0, moveZ = 0;
                             if (keys['w']) moveZ -= speed;
                             if (keys['s']) moveZ += speed;
@@ -212,17 +219,12 @@
                                 player.rotation.y = Math.atan2(moveX, moveZ);
                             }
 
-                            if (isDead) {
-                                camera.position.lerp(new THREE.Vector3(0, 40, 0.1), 0.1);
-                                camera.lookAt(0, 0, 0);
-                            } else {
-                                camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 12, player.position.z + 15), 0.1);
-                                camera.lookAt(player.position);
-                            }
+                            camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 15, player.position.z + 25), 0.1);
+                            camera.lookAt(player.position);
                         }
 
                         bots.forEach(bot => {
-                            if (!bot.isDead) {
+                            if (!bot.isDead && !gameOver) {
                                 bot.directionTimer++;
                                 
                                 if (bot.directionTimer > 100) {
@@ -230,9 +232,15 @@
                                     bot.directionTimer = 0;
                                 }
 
-                                const speed = 0.1;
-                                const moveX = Math.sin(bot.direction) * speed;
-                                const moveZ = Math.cos(bot.direction) * speed;
+                                // Eğer bot katilse, oyuncuya doğru yüzsün
+                                if (bot.isPredator) {
+                                    const dx = player.position.x - bot.position.x;
+                                    const dz = player.position.z - bot.position.z;
+                                    bot.direction = Math.atan2(dx, dz);
+                                }
+
+                                const moveX = Math.sin(bot.direction) * currentBotSpeed;
+                                const moveZ = Math.cos(bot.direction) * currentBotSpeed;
 
                                 let blocked = false;
                                 for (let obj of solidObjects) {
@@ -251,12 +259,23 @@
                                     bot.direction += Math.PI / 2; 
                                 }
 
-                                if (Math.abs(bot.position.x) > 60 || Math.abs(bot.position.z) > 60) {
+                                if (Math.abs(bot.position.x) > 70 || Math.abs(bot.position.z) > 70) {
                                     bot.direction += Math.PI;
                                 }
 
                                 bot.position.y = 3 + Math.sin(t * 1.5 + bot.position.x) * 0.4;
                                 bot.rotation.y = bot.direction;
+
+                                // Katil oyuncuya yaklaşırsa oyun biter
+                                if (bot.isPredator) {
+                                    const distToPlayer = Math.sqrt(Math.pow(bot.position.x - player.position.x, 2) + Math.pow(bot.position.z - player.position.z, 2));
+                                    if (distToPlayer < 5) { // Öldürme mesafesi
+                                        player.isDead = true;
+                                        setIsDead(true);
+                                        setGameOver(true);
+                                        setWinner("Katil Kazandı!");
+                                    }
+                                }
                             }
                         });
 
@@ -287,33 +306,85 @@
                     window.removeEventListener('resize', handleResize);
                     mountRef.current.removeChild(renderer.domElement);
                 };
-            }, [gameStarted]);
+            }, [gameStarted, difficulty, gameOver]);
 
             useEffect(() => {
-                if (gameStarted && timer > 0) {
-                    const interval = setInterval(() => setTimer(prev => prev > 0 ? prev - 1 : 0), 1000);
+                if (gameStarted && timer > 0 && !gameOver) {
+                    const interval = setInterval(() => {
+                        setTimer(prev => {
+                            if (prev <= 1) {
+                                setGameOver(true);
+                                setWinner("Masumlar Kazandı! (Süre Doldu)");
+                                return 0;
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
                     return () => clearInterval(interval);
                 }
-            }, [gameStarted, timer]);
+            }, [gameStarted, timer, gameOver]);
 
             return (
                 <div>
-                    {loading && gameStarted && (
+                    {loading && gameStarted && !gameOver && (
                         <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-slate-900 text-white text-2xl z-50">
                             <div className="animate-pulse">Harita ve Balıklar Yükleniyor...</div>
                         </div>
                     )}
                     
-                    {!gameStarted ? (
-                        <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white z-50">
-                            <h1 className="text-5xl font-bold mb-8 text-cyan-400">Deep Sea Mystery</h1>
+                    {gameOver && (
+                        <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-slate-900/90 text-white z-50">
+                            <h1 className="text-6xl font-bold mb-8 text-cyan-400">{winner}</h1>
                             <button 
                                 className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-8 rounded-full text-xl transition-all"
-                                onClick={() => setGameStarted(true)}
+                                onClick={() => window.location.reload()}
+                            >
+                                Tekrar Oyna
+                            </button>
+                        </div>
+                    )}
+
+                    {!gameStarted && !gameOver ? (
+                        <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white z-50">
+                            <h1 className="text-5xl font-bold mb-8 text-cyan-400">Deep Sea Mystery</h1>
+                            
+                            <div className="mb-6">
+                                <p className="text-center mb-2 text-slate-300">Zorluk Seviyesi</p>
+                                <div className="flex gap-2">
+                                    {['Kolay', 'Orta', 'Zor', 'İmkansız'].map(diff => (
+                                        <button 
+                                            key={diff}
+                                            className={`px-4 py-2 rounded-lg font-bold ${difficulty === diff ? 'bg-cyan-500' : 'bg-slate-700 hover:bg-slate-600'}`}
+                                            onClick={() => setDifficulty(diff)}
+                                        >
+                                            {diff}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mb-8">
+                                <p className="text-center mb-2 text-slate-300">Oyun Süresi</p>
+                                <div className="flex gap-2">
+                                    {[60, 120, 180, 300].map(time => (
+                                        <button 
+                                            key={time}
+                                            className={`px-4 py-2 rounded-lg font-bold ${gameDuration === time ? 'bg-cyan-500' : 'bg-slate-700 hover:bg-slate-600'}`}
+                                            onClick={() => setGameDuration(time)}
+                                        >
+                                            {time}s
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button 
+                                className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-12 rounded-full text-2xl transition-all"
+                                onClick={() => { setTimer(gameDuration); setGameStarted(true); }}
                             >
                                 Oyna
                             </button>
-                            <p className="mt-4 text-slate-400">WASD ile yüzin, R ile listeyi açın.</p>
+                            <p className="mt-4 text-slate-400">WASD ile yüzin, R ile listeyi açın. Katil balıktan kaçın!</p>
                         </div>
                     ) : (
                         <>
@@ -323,14 +394,14 @@
                                     {timer}s
                                 </div>
                                 
-                                {showRoster && (
+                                {showRoster && !gameOver && (
                                     <div className="absolute top-4 right-4 bg-black/50 text-white p-4 rounded-lg w-64">
                                         <h2 className="font-bold mb-2 border-b border-slate-600 pb-1">Balıklar (R)</h2>
                                         <ul>
                                             {roster.map((fish, i) => (
                                                 <li key={i} className={`flex justify-between ${fish.isDead ? 'text-red-500 line-through' : 'text-green-400'}`}>
                                                     <span>{fish.name}</span>
-                                                    <span className="text-xs opacity-70">{fish.role}</span>
+                                                    <span className="text-xs opacity-70">{fish.isDead ? "Ölü" : "Hayatta"}</span>
                                                 </li>
                                             ))}
                                         </ul>
