@@ -44,14 +44,21 @@
             const gameStateRef = useRef({
                 scene: null, camera: null, renderer: null,
                 player: null, bots: [], solidObjects: [],
-                keys: {}, time: 0, botSpeed: 0.1
+                keys: {}, time: 0
             });
+
+            // Ref'ler (Game loop'un içinde anlık değerleri okumak için)
+            const gameOverRef = useRef(false);
+            const difficultyRef = useRef(difficulty);
+
+            useEffect(() => { gameOverRef.current = gameOver; }, [gameOver]);
+            useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
 
             useEffect(() => {
                 if (!gameStarted) return;
 
                 const scene = new THREE.Scene();
-                scene.fog = new THREE.Fog(0x1a3a5a, 60, 200); // Sis uzaklaştırıldı (Daha geniş alan için)
+                scene.fog = new THREE.Fog(0x1a3a5a, 60, 200);
 
                 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 
@@ -81,7 +88,6 @@
                     { path: 'models/Mirfish_3D.glb', name: 'Mirfish' }
                 ];
 
-                // Objeler ve Odalar Büyütüldü (Scale 3 ve 6 yapıldı)
                 const envSpawnList = [
                     { name: 'temple_room.glb', x: 0, z: 0, scale: 6, radius: 0 },
                     { name: 'ship_hull.glb', x: -40, z: 15, scale: 6, radius: 0 },
@@ -113,8 +119,16 @@
                 };
 
                 const createFish = (model, isPlayer, fishName) => {
-                    model.scale.set(3, 3, 3); // Balıklar büyütüldü
-                    model.position.set((Math.random() - 0.5) * 20 + 20, 3, 30);
+                    model.scale.set(3, 3, 3);
+                    
+                    // DOĞMA NOKTALARI DÜZELTİLDİ (Artık üst üste doğmuyorlar)
+                    if (isPlayer) {
+                        model.position.set(0, 3, 40); // Oyuncu Kuzey'de doğar
+                    } else {
+                        // Botlar Güney ve kenarlarda rastgele doğar
+                        model.position.set((Math.random() - 0.5) * 80, 3, (Math.random() - 0.5) * 60 - 30);
+                    }
+
                     model.isDead = false; 
                     model.isPredator = false;
                     model.isProtector = false;
@@ -166,13 +180,13 @@
 
                 const assignRoles = () => {
                     const player = gameStateRef.current.player;
-                    player.isPredator = false; // Oyuncu daima masum (hayatta kalmaya çalışıyor)
+                    player.isPredator = false;
                     player.isProtector = false;
                     
                     const bots = [...gameStateRef.current.bots];
                     bots.sort(() => Math.random() - 0.5);
-                    bots[0].isPredator = true; // Botlardan biri gizli katil
-                    bots[1].isProtector = true;
+                    bots[0].isPredator = true; // Gizli Katil
+                    bots[1].isProtector = true; // Şerif
                     
                     const newRoster = [player, ...bots].map((fish) => {
                         return { name: fish.fishName, isDead: false };
@@ -188,11 +202,10 @@
                         const t = gameStateRef.current.time;
                         const { player, bots, solidObjects, keys } = gameStateRef.current;
 
-                        // Zorluk seviyesine göre bot hızı
                         const botSpeeds = { 'Kolay': 0.05, 'Orta': 0.1, 'Zor': 0.2, 'İmkansız': 0.35 };
-                        const currentBotSpeed = botSpeeds[difficulty];
+                        const currentBotSpeed = botSpeeds[difficultyRef.current];
 
-                        if (player && !player.isDead && !gameOver) {
+                        if (player && !player.isDead && !gameOverRef.current) {
                             const speed = 0.4;
                             let moveX = 0, moveZ = 0;
                             if (keys['w']) moveZ -= speed;
@@ -224,7 +237,7 @@
                         }
 
                         bots.forEach(bot => {
-                            if (!bot.isDead && !gameOver) {
+                            if (!bot.isDead && !gameOverRef.current) {
                                 bot.directionTimer++;
                                 
                                 if (bot.directionTimer > 100) {
@@ -232,11 +245,15 @@
                                     bot.directionTimer = 0;
                                 }
 
-                                // Eğer bot katilse, oyuncuya doğru yüzsün
+                                // KATİL YAPAY ZEKASI (Sadece yakınsa takip eder)
                                 if (bot.isPredator) {
                                     const dx = player.position.x - bot.position.x;
                                     const dz = player.position.z - bot.position.z;
-                                    bot.direction = Math.atan2(dx, dz);
+                                    const distToPlayer = Math.sqrt(dx * dx + dz * dz);
+                                    
+                                    if (distToPlayer < 40) { // Görüş mesafesi 40 birim
+                                        bot.direction = Math.atan2(dx, dz); // Takip et
+                                    }
                                 }
 
                                 const moveX = Math.sin(bot.direction) * currentBotSpeed;
@@ -266,10 +283,10 @@
                                 bot.position.y = 3 + Math.sin(t * 1.5 + bot.position.x) * 0.4;
                                 bot.rotation.y = bot.direction;
 
-                                // Katil oyuncuya yaklaşırsa oyun biter
+                                // ÖLDÜRME KOŞULU
                                 if (bot.isPredator) {
                                     const distToPlayer = Math.sqrt(Math.pow(bot.position.x - player.position.x, 2) + Math.pow(bot.position.z - player.position.z, 2));
-                                    if (distToPlayer < 5) { // Öldürme mesafesi
+                                    if (distToPlayer < 5 && !player.isDead) { 
                                         player.isDead = true;
                                         setIsDead(true);
                                         setGameOver(true);
@@ -304,9 +321,11 @@
                     window.removeEventListener('keydown', handleKeyDown);
                     window.removeEventListener('keyup', handleKeyUp);
                     window.removeEventListener('resize', handleResize);
-                    mountRef.current.removeChild(renderer.domElement);
+                    if (mountRef.current) {
+                        mountRef.current.removeChild(renderer.domElement);
+                    }
                 };
-            }, [gameStarted, difficulty, gameOver]);
+            }, [gameStarted]); // Sadece gameStarted değişince çalışır
 
             useEffect(() => {
                 if (gameStarted && timer > 0 && !gameOver) {
