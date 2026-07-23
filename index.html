@@ -8,9 +8,9 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- THREE.JS STABİL SÜRÜM -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- THREE.JS STABİL SÜRÜM (r128) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background: #0f172a; font-family: 'Arial', sans-serif; }
         canvas { display: block; }
@@ -77,26 +77,25 @@
                     'models/Bugsyfish.glb', 'models/Rozyfish.glb', 'models/Elifish.glb', 'models/Mirfish_3D.glb'
                 ];
 
-                // 2. Ortam Modelleri ve Haritadaki Konumları
+                // 2. ORTAM MODELLERİ (YENİ LABİRENT DİZİLİMİ)
                 const envSpawnList = [
-                    { name: 'shipwreck.glb', x: 25, z: 25, scale: 3, radius: 8 },
-                    { name: 'ancient_ruin.glb', x: -25, z: 30, scale: 2, radius: 6 },
-                    { name: 'stone_arch.glb', x: 30, z: -20, scale: 2.5, radius: 6 },
-                    { name: 'shark_cage.glb', x: -30, z: -25, scale: 2, radius: 4 },
-                    { name: 'coral_tube.glb', x: 15, z: -35, scale: 2, radius: 4 },
-                    { name: 'coral_tube.glb', x: -10, z: 20, scale: 2, radius: 4 },
-                    { name: 'giant_kelp.glb', x: 20, z: 10, scale: 2, radius: 3 },
-                    { name: 'giant_kelp.glb', x: -15, z: -15, scale: 2, radius: 3 },
-                    { name: 'coral_reef.glb', x: 40, z: 0, scale: 2, radius: 5 },
-                    { name: 'coral_reef.glb', x: -40, z: 10, scale: 2, radius: 5 },
-                    { name: 'sand_dune.glb', x: 0, z: 40, scale: 3, radius: 6 },
-                    { name: 'sand_dune.glb', x: 0, z: -40, scale: 3, radius: 6 },
-                    { name: 'treasure_chest.glb', x: 10, z: 30, scale: 1.5, radius: 3 },
-                    { name: 'treasure_chest.glb', x: -20, z: -30, scale: 1.5, radius: 3 },
-                    { name: 'skeleton.glb', x: 5, z: -20, scale: 1.5, radius: 3 },
-                    { name: 'diving_mask.glb', x: -5, z: 25, scale: 1, radius: 2 },
-                    { name: 'seabed.glb', x: 35, z: -35, scale: 2, radius: 5 },
-                    { name: 'seabed.glb', x: -35, z: 35, scale: 2, radius: 5 }
+                    // --- BÜYÜK ODALAR (Radius 0 = İçine girilebilir) ---
+                    { name: 'temple_room.glb', x: 0, z: 0, scale: 3, radius: 0 },       // Merkez
+                    { name: 'ship_hull.glb', x: -35, z: 10, scale: 3, radius: 0 },      // Batı (Sol)
+                    { name: 'coral_cave.glb', x: 35, z: 10, scale: 3, radius: 0 },      // Doğu (Sağ)
+                    { name: 'submarine_section.glb', x: 0, z: -40, scale: 3, radius: 0 }, // Güney (Aşağı)
+                    
+                    // --- İPUÇLARI VE KÜÇÜK OBJELER (İçine girilemez, çarpar) ---
+                    { name: 'treasure_chest.glb', x: 5, z: 5, scale: 1.5, radius: 3 },      // Tapınağın içi
+                    { name: 'treasure_chest.glb', x: -30, z: 15, scale: 1.5, radius: 3 },   // Geminin içi
+                    { name: 'diving_mask.glb', x: -5, z: -5, scale: 1, radius: 2 },         // Tapınağın gerisi
+                    { name: 'skeleton.glb', x: 30, z: 5, scale: 1.5, radius: 3 },          // Mağaranın girişi
+                    { name: 'giant_kelp.glb', x: 15, z: -20, scale: 2, radius: 2 },         // Denizaltı yolu
+                    { name: 'giant_kelp.glb', x: -15, z: -20, scale: 2, radius: 2 },        // Denizaltı yolu
+                    { name: 'coral_reef.glb', x: 45, z: -20, scale: 2, radius: 4 },         // Köşe dekoru
+                    { name: 'coral_reef.glb', x: -45, z: -20, scale: 2, radius: 4 },        // Köşe dekoru
+                    { name: 'coral_tube.glb', x: 20, z: 30, scale: 2, radius: 3 },          // Kuzey geçidi
+                    { name: 'coral_tube.glb', x: -20, z: 30, scale: 2, radius: 3 }          // Kuzey geçidi
                 ];
 
                 let totalToLoad = fishModels.length + envSpawnList.length;
@@ -113,7 +112,8 @@
 
                 const createFish = (model, isPlayer) => {
                     model.scale.set(2, 2, 2);
-                    model.position.set((Math.random() - 0.5) * 10, 2, (Math.random() - 0.5) * 10);
+                    // Oyuncuyu ve botları haritanın kuzeyinde (boş bir alanda) doğur
+                    model.position.set((Math.random() - 0.5) * 10 + 15, 2, 20);
                     model.isDead = false; 
                     model.isPredator = false;
                     model.isProtector = false;
@@ -143,7 +143,7 @@
                         model.position.set(item.x, 0, item.z);
                         model.scale.set(item.scale, item.scale, item.scale);
                         model.isFloor = false;
-                        model.collisionRadius = item.radius;
+                        model.collisionRadius = item.radius; // Odalar için 0, objeler için dolu
                         model.traverse(child => { 
                             if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } 
                         });
@@ -190,7 +190,8 @@
                             const checkCollision = (newX, newZ) => {
                                 for (let obj of solidObjects) {
                                     if (obj.isFloor) continue; 
-                                    const radius = obj.collisionRadius || 5;
+                                    const radius = obj.collisionRadius || 0; 
+                                    if (radius === 0) continue; // Radius 0 ise içine girilebilir!
                                     const dist = Math.sqrt(Math.pow(newX - obj.position.x, 2) + Math.pow(newZ - obj.position.z, 2));
                                     if (dist < radius) return true;
                                 }
@@ -261,7 +262,7 @@
                 <div>
                     {loading && gameStarted && (
                         <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-slate-900 text-white text-2xl z-50">
-                            <div className="animate-pulse">Harita ve Balıklar Yükleniyor...</div>
+                            <div className="animate-pulse">Labirent ve Balıklar Yükleniyor...</div>
                         </div>
                     )}
                     
