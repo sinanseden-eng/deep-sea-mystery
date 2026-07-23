@@ -34,6 +34,7 @@
             const [timer, setTimer] = useState(60);
             const [showRoster, setShowRoster] = useState(true);
             const [loading, setLoading] = useState(true);
+            const [loadProgress, setLoadProgress] = useState(0);
             const [roster, setRoster] = useState([]);
             const [difficulty, setDifficulty] = useState('Orta');
             const [gameDuration, setGameDuration] = useState(60);
@@ -58,7 +59,9 @@
                 if (!gameStarted) return;
 
                 const scene = new THREE.Scene();
-                scene.fog = new THREE.Fog(0x1a3a5a, 60, 200);
+                // Fog rengi bg1.jpg'nin ortalama tonuyla eşleşecek şekilde ayarlandı (#2d687b),
+                // önceki koyu lacivert (#1a3a5a) resimle net bir "dikiş" oluşturuyordu.
+                scene.fog = new THREE.Fog(0x2d687b, 60, 200);
 
                 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 
@@ -76,6 +79,19 @@
                 sunLight.castShadow = true;
                 scene.add(sunLight);
 
+                // Odalar arasındaki boşlukta hiç zemin yoktu (versiyon 2'de zemin tamamen
+                // kaldırılmış), yani oyuncu geçişlerde koyu bir boşlukta yüzüyor gibi görünüyordu.
+                // Bütün alanı kaplayan alçak bir kum zemin geri eklendi.
+                const floorGeo = new THREE.PlaneGeometry(240, 240);
+                const floorMat = new THREE.MeshStandardMaterial({ color: 0xc2b280 });
+                const floor = new THREE.Mesh(floorGeo, floorMat);
+                floor.rotation.x = -Math.PI / 2;
+                floor.position.y = -0.1;
+                floor.receiveShadow = true;
+                floor.isFloor = true;
+                scene.add(floor);
+                gameStateRef.current.solidObjects.push(floor);
+
                 const loader = new THREE.GLTFLoader();
                 
                 const fishModels = [
@@ -89,10 +105,17 @@
                 ];
 
                 const envSpawnList = [
-                    { name: 'temple_room.glb', x: 0, z: 0, scale: 6, radius: 0 },
-                    { name: 'ship_hull.glb', x: -40, z: 15, scale: 6, radius: 0 },
-                    { name: 'coral_cave.glb', x: 40, z: 15, scale: 6, radius: 0 },
-                    { name: 'submarine_section.glb', x: 0, z: -45, scale: 6, radius: 0 },
+                    // NOT: dosya adları GitHub'a yüklediğin haliyle birebir eşleşiyor
+                    // (coral_cave -> coral_rave, ship_hull.glb -> ship_hull.glb.glb).
+                    // Ölçek 6'dan 18'e çıkarıldı: modellerin gerçek boyutu ~2x2x2 birime
+                    // normalize edilmiş, yani scale:6 ile oda sadece 12 birim genişliğindeydi
+                    // ama aralarında 40-45 birim mesafe vardı - odalar küçük kutucuklar halinde
+                    // koca bir boşlukta yüzüyordu. scale:18 ile odalar ~36 birim genişliğinde
+                    // olup birbirine çok daha yakın duracak. Gözle kontrol edip ince ayar yap.
+                    { name: 'temple_room.glb', x: 0, z: 0, scale: 18, radius: 0 },
+                    { name: 'ship_hull.glb.glb', x: -40, z: 15, scale: 18, radius: 0 },
+                    { name: 'coral_rave.glb', x: 40, z: 15, scale: 18, radius: 0 },
+                    { name: 'submarine_section.glb', x: 0, z: -45, scale: 18, radius: 0 },
                     
                     { name: 'treasure_chest.glb', x: 5, z: 5, scale: 3, radius: 4 },
                     { name: 'treasure_chest.glb', x: -35, z: 20, scale: 3, radius: 4 },
@@ -111,6 +134,7 @@
 
                 const onAssetLoad = () => {
                     currentLoaded++;
+                    setLoadProgress(Math.round((currentLoaded / totalToLoad) * 100));
                     if (currentLoaded === totalToLoad) {
                         setLoading(false);
                         assignRoles();
@@ -202,8 +226,11 @@
                         const t = gameStateRef.current.time;
                         const { player, bots, solidObjects, keys } = gameStateRef.current;
 
-                        const botSpeeds = { 'Kolay': 0.05, 'Orta': 0.1, 'Zor': 0.2, 'İmkansız': 0.35 };
-                        const currentBotSpeed = botSpeeds[difficultyRef.current];
+                        // Zorluk artık sadece katilin hızını etkiliyor — önceden tüm balıkları
+                        // aynı oranda hızlandırıyordu, bu da "zor" modu katili değil genel
+                        // kalabalığı daha kaotik yapıyordu.
+                        const predatorSpeeds = { 'Kolay': 0.09, 'Orta': 0.14, 'Zor': 0.22, 'İmkansız': 0.32 };
+                        const ambientSpeed = 0.08;
 
                         if (player && !player.isDead && !gameOverRef.current) {
                             const speed = 0.4;
@@ -256,6 +283,7 @@
                                     }
                                 }
 
+                                const currentBotSpeed = bot.isPredator ? predatorSpeeds[difficultyRef.current] : ambientSpeed;
                                 const moveX = Math.sin(bot.direction) * currentBotSpeed;
                                 const moveZ = Math.cos(bot.direction) * currentBotSpeed;
 
@@ -346,8 +374,14 @@
             return (
                 <div>
                     {loading && gameStarted && !gameOver && (
-                        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-slate-900 text-white text-2xl z-50">
-                            <div className="animate-pulse">Harita ve Balıklar Yükleniyor...</div>
+                        <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white text-2xl z-50">
+                            <div className="mb-4">Harita ve Balıklar Yükleniyor... %{loadProgress}</div>
+                            <div className="w-64 h-3 bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-cyan-400 transition-all duration-200"
+                                    style={{ width: `${loadProgress}%` }}
+                                ></div>
+                            </div>
                         </div>
                     )}
                     
