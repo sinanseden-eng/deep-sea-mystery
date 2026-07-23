@@ -11,7 +11,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background: #0f172a; font-family: 'Arial', sans-serif; }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: url('textures/bg1.jpg') no-repeat center center fixed; 
+            background-size: cover; 
+            font-family: 'Arial', sans-serif; 
+        }
         canvas { display: block; }
         .ui-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
     </style>
@@ -41,28 +47,26 @@
                 if (!gameStarted) return;
 
                 const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x0a192a); // Koyu deniz mavisi
-                scene.fog = new THREE.Fog(0x0a192a, 30, 100); // Mesafe sisi
+                scene.fog = new THREE.Fog(0x1a3a5a, 50, 180);
 
                 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 
-                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 renderer.shadowMap.enabled = true;
+                renderer.setClearColor(0x000000, 0); 
                 mountRef.current.appendChild(renderer.domElement);
 
-                // ISIKLANDIRMA (Deniz altı havası için)
-                const ambientLight = new THREE.AmbientLight(0x4488aa, 1.5); // Yumuşak mavi ortam ışığı
+                const ambientLight = new THREE.AmbientLight(0x6080a0, 1.2); 
                 scene.add(ambientLight);
                 
-                const sunLight = new THREE.DirectionalLight(0xffffff, 1.2); // Yukarıdan beyaz güneş ışığı (Su altında kırılan)
+                const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
                 sunLight.position.set(20, 50, 20);
                 sunLight.castShadow = true;
                 scene.add(sunLight);
 
-                // Zemin (Koyu deniz kumu)
                 const floorGeo = new THREE.PlaneGeometry(200, 200);
-                const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a2b3a }); 
+                const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a3b4a }); 
                 const floor = new THREE.Mesh(floorGeo, floorMat);
                 floor.rotation.x = -Math.PI / 2;
                 floor.receiveShadow = true;
@@ -72,11 +76,18 @@
 
                 const loader = new THREE.GLTFLoader();
                 
+                // 1. BALIKLAR (models/ klasöründen yüklenir)
                 const fishModels = [
-                    'models/Sinfish.glb', 'models/Ninfish_3D.glb', 'models/Pinkfish.glb', 
-                    'models/Bugsyfish.glb', 'models/Rozyfish.glb', 'models/Elifish.glb', 'models/Mirfish_3D.glb'
+                    { path: 'models/Sinfish.glb', name: 'Sinfish' },
+                    { path: 'models/Ninfish_3D.glb', name: 'Ninfish' },
+                    { path: 'models/Pinkfish.glb', name: 'Pinkfish' },
+                    { path: 'models/Bugsyfish.glb', name: 'Bugsyfish' },
+                    { path: 'models/Rozyfish.glb', name: 'Rozyfish' },
+                    { path: 'models/Elifish.glb', name: 'Elifish' },
+                    { path: 'models/Mirfish_3D.glb', name: 'Mirfish' }
                 ];
 
+                // 2. ORTAM OBJELERİ (models/environment/ klasöründen yüklenir)
                 const envSpawnList = [
                     { name: 'temple_room.glb', x: 0, z: 0, scale: 3, radius: 0 },
                     { name: 'ship_hull.glb', x: -35, z: 10, scale: 3, radius: 0 },
@@ -107,16 +118,16 @@
                     }
                 };
 
-                const createFish = (model, isPlayer) => {
+                const createFish = (model, isPlayer, fishName) => {
                     model.scale.set(2, 2, 2);
                     model.position.set((Math.random() - 0.5) * 10 + 15, 3, 20);
                     model.isDead = false; 
                     model.isPredator = false;
                     model.isProtector = false;
+                    model.fishName = fishName;
                     
-                    // Botlar için yön takibi
                     if (!isPlayer) {
-                        model.direction = Math.random() * Math.PI * 2; // Başlangıç yönü
+                        model.direction = Math.random() * Math.PI * 2;
                         model.directionTimer = 0;
                     }
                     
@@ -127,15 +138,15 @@
                     scene.add(model);
                 };
 
-                fishModels.forEach((fishPath, index) => {
-                    loader.load(fishPath, (gltf) => {
-                        createFish(gltf.scene, index === 0);
+                fishModels.forEach((fishData, index) => {
+                    loader.load(fishData.path, (gltf) => {
+                        createFish(gltf.scene, index === 0, fishData.name);
                         onAssetLoad();
                     }, undefined, (err) => {
-                        console.error("Model yüklenemedi:", fishPath, err);
+                        console.error("Balık modeli yüklenemedi:", fishData.path, err);
                         const boxGeo = new THREE.BoxGeometry(2, 1, 3);
                         const boxMat = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
-                        createFish(new THREE.Mesh(boxGeo, boxMat), index === 0);
+                        createFish(new THREE.Mesh(boxGeo, boxMat), index === 0, fishData.name + " (Hata!)");
                         onAssetLoad();
                     });
                 });
@@ -165,11 +176,11 @@
                     allFish[0].isPredator = true;
                     allFish[1].isProtector = true;
                     
-                    const newRoster = allFish.map((fish, i) => {
+                    const newRoster = allFish.map((fish) => {
                         let role = "Masum";
                         if (fish.isPredator) role = "Katil";
                         if (fish.isProtector) role = "Şerif";
-                        return { name: `Balık ${i+1}`, role, isDead: false };
+                        return { name: fish.fishName, role, isDead: false };
                     });
                     setRoster(newRoster);
                 };
@@ -178,7 +189,7 @@
                 const startGameLoop = () => {
                     const animate = () => {
                         animationId = requestAnimationFrame(animate);
-                        gameStateRef.current.time += 0.02; // Süre yavaşlatıldı (Daha doğal yüzme)
+                        gameStateRef.current.time += 0.02;
                         const t = gameStateRef.current.time;
                         const { player, bots, solidObjects, keys } = gameStateRef.current;
 
@@ -204,7 +215,6 @@
                             if (!checkCollision(player.position.x + moveX, player.position.z)) player.position.x += moveX;
                             if (!checkCollision(player.position.x, player.position.z + moveZ)) player.position.z += moveZ;
 
-                            // Yavaş ve doğal yüzme salınımı
                             player.position.y = 3 + Math.sin(t * 1.5) * 0.4; 
                             if (moveX !== 0 || moveZ !== 0) {
                                 player.rotation.y = Math.atan2(moveX, moveZ);
@@ -219,14 +229,12 @@
                             }
                         }
 
-                        // BOTLARIN AKILLI YÜZME HAREKETLERİ
                         bots.forEach(bot => {
                             if (!bot.isDead) {
                                 bot.directionTimer++;
                                 
-                                // Her 100 karede bir yeni bir yöne dön
                                 if (bot.directionTimer > 100) {
-                                    bot.direction += (Math.random() - 0.5) * 1.5; // Hafif yön değişimi
+                                    bot.direction += (Math.random() - 0.5) * 1.5;
                                     bot.directionTimer = 0;
                                 }
 
@@ -234,8 +242,6 @@
                                 const moveX = Math.sin(bot.direction) * speed;
                                 const moveZ = Math.cos(bot.direction) * speed;
 
-                                // Çarpışma kontrolü (Çarparsa geri döner)
-                                const distCheck = Math.sqrt(Math.pow(bot.position.x + moveX, 2) + Math.pow(bot.position.z + moveZ, 2));
                                 let blocked = false;
                                 for (let obj of solidObjects) {
                                     if (obj.isFloor || (obj.collisionRadius || 0) === 0) continue;
@@ -250,13 +256,11 @@
                                     bot.position.x += moveX;
                                     bot.position.z += moveZ;
                                 } else {
-                                    // Engelle karşılaşınca anında yön değiştir
                                     bot.direction += Math.PI / 2; 
                                 }
 
-                                // Haritadan dışarı çıkmayı engelle
                                 if (Math.abs(bot.position.x) > 60 || Math.abs(bot.position.z) > 60) {
-                                    bot.direction += Math.PI; // Geri dön
+                                    bot.direction += Math.PI;
                                 }
 
                                 bot.position.y = 3 + Math.sin(t * 1.5 + bot.position.x) * 0.4;
