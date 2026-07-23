@@ -8,7 +8,6 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- THREE.JS STABİL SÜRÜM (r128) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
@@ -42,8 +41,8 @@
                 if (!gameStarted) return;
 
                 const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x0f172a);
-                scene.fog = new THREE.Fog(0x0f172a, 20, 80);
+                scene.background = new THREE.Color(0x0a192a); // Koyu deniz mavisi
+                scene.fog = new THREE.Fog(0x0a192a, 30, 100); // Mesafe sisi
 
                 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 
@@ -52,15 +51,18 @@
                 renderer.shadowMap.enabled = true;
                 mountRef.current.appendChild(renderer.domElement);
 
-                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+                // ISIKLANDIRMA (Deniz altı havası için)
+                const ambientLight = new THREE.AmbientLight(0x4488aa, 1.5); // Yumuşak mavi ortam ışığı
                 scene.add(ambientLight);
-                const directionalLight = new THREE.DirectionalLight(0x00ffff, 0.8);
-                directionalLight.position.set(0, 50, 0);
-                directionalLight.castShadow = true;
-                scene.add(directionalLight);
+                
+                const sunLight = new THREE.DirectionalLight(0xffffff, 1.2); // Yukarıdan beyaz güneş ışığı (Su altında kırılan)
+                sunLight.position.set(20, 50, 20);
+                sunLight.castShadow = true;
+                scene.add(sunLight);
 
+                // Zemin (Koyu deniz kumu)
                 const floorGeo = new THREE.PlaneGeometry(200, 200);
-                const floorMat = new THREE.MeshStandardMaterial({ color: 0xc2b280 });
+                const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a2b3a }); 
                 const floor = new THREE.Mesh(floorGeo, floorMat);
                 floor.rotation.x = -Math.PI / 2;
                 floor.receiveShadow = true;
@@ -68,34 +70,29 @@
                 scene.add(floor);
                 gameStateRef.current.solidObjects.push(floor);
 
-                // MODEL YÜKLEYİCİ
                 const loader = new THREE.GLTFLoader();
                 
-                // 1. Balık Modelleri
                 const fishModels = [
                     'models/Sinfish.glb', 'models/Ninfish_3D.glb', 'models/Pinkfish.glb', 
                     'models/Bugsyfish.glb', 'models/Rozyfish.glb', 'models/Elifish.glb', 'models/Mirfish_3D.glb'
                 ];
 
-                // 2. ORTAM MODELLERİ (YENİ LABİRENT DİZİLİMİ)
                 const envSpawnList = [
-                    // --- BÜYÜK ODALAR (Radius 0 = İçine girilebilir) ---
-                    { name: 'temple_room.glb', x: 0, z: 0, scale: 3, radius: 0 },       // Merkez
-                    { name: 'ship_hull.glb', x: -35, z: 10, scale: 3, radius: 0 },      // Batı (Sol)
-                    { name: 'coral_cave.glb', x: 35, z: 10, scale: 3, radius: 0 },      // Doğu (Sağ)
-                    { name: 'submarine_section.glb', x: 0, z: -40, scale: 3, radius: 0 }, // Güney (Aşağı)
+                    { name: 'temple_room.glb', x: 0, z: 0, scale: 3, radius: 0 },
+                    { name: 'ship_hull.glb', x: -35, z: 10, scale: 3, radius: 0 },
+                    { name: 'coral_cave.glb', x: 35, z: 10, scale: 3, radius: 0 },
+                    { name: 'submarine_section.glb', x: 0, z: -40, scale: 3, radius: 0 },
                     
-                    // --- İPUÇLARI VE KÜÇÜK OBJELER (İçine girilemez, çarpar) ---
-                    { name: 'treasure_chest.glb', x: 5, z: 5, scale: 1.5, radius: 3 },      // Tapınağın içi
-                    { name: 'treasure_chest.glb', x: -30, z: 15, scale: 1.5, radius: 3 },   // Geminin içi
-                    { name: 'diving_mask.glb', x: -5, z: -5, scale: 1, radius: 2 },         // Tapınağın gerisi
-                    { name: 'skeleton.glb', x: 30, z: 5, scale: 1.5, radius: 3 },          // Mağaranın girişi
-                    { name: 'giant_kelp.glb', x: 15, z: -20, scale: 2, radius: 2 },         // Denizaltı yolu
-                    { name: 'giant_kelp.glb', x: -15, z: -20, scale: 2, radius: 2 },        // Denizaltı yolu
-                    { name: 'coral_reef.glb', x: 45, z: -20, scale: 2, radius: 4 },         // Köşe dekoru
-                    { name: 'coral_reef.glb', x: -45, z: -20, scale: 2, radius: 4 },        // Köşe dekoru
-                    { name: 'coral_tube.glb', x: 20, z: 30, scale: 2, radius: 3 },          // Kuzey geçidi
-                    { name: 'coral_tube.glb', x: -20, z: 30, scale: 2, radius: 3 }          // Kuzey geçidi
+                    { name: 'treasure_chest.glb', x: 5, z: 5, scale: 1.5, radius: 3 },
+                    { name: 'treasure_chest.glb', x: -30, z: 15, scale: 1.5, radius: 3 },
+                    { name: 'diving_mask.glb', x: -5, z: -5, scale: 1, radius: 2 },
+                    { name: 'skeleton.glb', x: 30, z: 5, scale: 1.5, radius: 3 },
+                    { name: 'giant_kelp.glb', x: 15, z: -20, scale: 2, radius: 2 },
+                    { name: 'giant_kelp.glb', x: -15, z: -20, scale: 2, radius: 2 },
+                    { name: 'coral_reef.glb', x: 45, z: -20, scale: 2, radius: 4 },
+                    { name: 'coral_reef.glb', x: -45, z: -20, scale: 2, radius: 4 },
+                    { name: 'coral_tube.glb', x: 20, z: 30, scale: 2, radius: 3 },
+                    { name: 'coral_tube.glb', x: -20, z: 30, scale: 2, radius: 3 }
                 ];
 
                 let totalToLoad = fishModels.length + envSpawnList.length;
@@ -112,11 +109,17 @@
 
                 const createFish = (model, isPlayer) => {
                     model.scale.set(2, 2, 2);
-                    // Oyuncuyu ve botları haritanın kuzeyinde (boş bir alanda) doğur
-                    model.position.set((Math.random() - 0.5) * 10 + 15, 2, 20);
+                    model.position.set((Math.random() - 0.5) * 10 + 15, 3, 20);
                     model.isDead = false; 
                     model.isPredator = false;
                     model.isProtector = false;
+                    
+                    // Botlar için yön takibi
+                    if (!isPlayer) {
+                        model.direction = Math.random() * Math.PI * 2; // Başlangıç yönü
+                        model.directionTimer = 0;
+                    }
+                    
                     model.traverse(child => { if (child.isMesh) { child.castShadow = true; } });
                     
                     if (isPlayer) gameStateRef.current.player = model;
@@ -143,7 +146,7 @@
                         model.position.set(item.x, 0, item.z);
                         model.scale.set(item.scale, item.scale, item.scale);
                         model.isFloor = false;
-                        model.collisionRadius = item.radius; // Odalar için 0, objeler için dolu
+                        model.collisionRadius = item.radius;
                         model.traverse(child => { 
                             if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } 
                         });
@@ -175,12 +178,12 @@
                 const startGameLoop = () => {
                     const animate = () => {
                         animationId = requestAnimationFrame(animate);
-                        gameStateRef.current.time += 0.05;
+                        gameStateRef.current.time += 0.02; // Süre yavaşlatıldı (Daha doğal yüzme)
                         const t = gameStateRef.current.time;
                         const { player, bots, solidObjects, keys } = gameStateRef.current;
 
                         if (player && !player.isDead) {
-                            const speed = 0.5;
+                            const speed = 0.3;
                             let moveX = 0, moveZ = 0;
                             if (keys['w']) moveZ -= speed;
                             if (keys['s']) moveZ += speed;
@@ -191,7 +194,7 @@
                                 for (let obj of solidObjects) {
                                     if (obj.isFloor) continue; 
                                     const radius = obj.collisionRadius || 0; 
-                                    if (radius === 0) continue; // Radius 0 ise içine girilebilir!
+                                    if (radius === 0) continue;
                                     const dist = Math.sqrt(Math.pow(newX - obj.position.x, 2) + Math.pow(newZ - obj.position.z, 2));
                                     if (dist < radius) return true;
                                 }
@@ -201,24 +204,63 @@
                             if (!checkCollision(player.position.x + moveX, player.position.z)) player.position.x += moveX;
                             if (!checkCollision(player.position.x, player.position.z + moveZ)) player.position.z += moveZ;
 
-                            player.position.y = 2 + Math.sin(t * 2) * 0.5;
-                            if (moveX !== 0 || moveZ !== 0) player.rotation.y = Math.atan2(moveX, moveZ);
+                            // Yavaş ve doğal yüzme salınımı
+                            player.position.y = 3 + Math.sin(t * 1.5) * 0.4; 
+                            if (moveX !== 0 || moveZ !== 0) {
+                                player.rotation.y = Math.atan2(moveX, moveZ);
+                            }
 
                             if (isDead) {
                                 camera.position.lerp(new THREE.Vector3(0, 40, 0.1), 0.1);
                                 camera.lookAt(0, 0, 0);
                             } else {
-                                camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 15, player.position.z + 20), 0.1);
+                                camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 12, player.position.z + 15), 0.1);
                                 camera.lookAt(player.position);
                             }
                         }
 
+                        // BOTLARIN AKILLI YÜZME HAREKETLERİ
                         bots.forEach(bot => {
                             if (!bot.isDead) {
-                                bot.position.x += (Math.random() - 0.5) * 0.2;
-                                bot.position.z += (Math.random() - 0.5) * 0.2;
-                                bot.position.y = 2 + Math.sin(t * 2 + bot.position.x) * 0.5;
-                                bot.rotation.y = Math.atan2((Math.random() - 0.5), (Math.random() - 0.5));
+                                bot.directionTimer++;
+                                
+                                // Her 100 karede bir yeni bir yöne dön
+                                if (bot.directionTimer > 100) {
+                                    bot.direction += (Math.random() - 0.5) * 1.5; // Hafif yön değişimi
+                                    bot.directionTimer = 0;
+                                }
+
+                                const speed = 0.1;
+                                const moveX = Math.sin(bot.direction) * speed;
+                                const moveZ = Math.cos(bot.direction) * speed;
+
+                                // Çarpışma kontrolü (Çarparsa geri döner)
+                                const distCheck = Math.sqrt(Math.pow(bot.position.x + moveX, 2) + Math.pow(bot.position.z + moveZ, 2));
+                                let blocked = false;
+                                for (let obj of solidObjects) {
+                                    if (obj.isFloor || (obj.collisionRadius || 0) === 0) continue;
+                                    const dist = Math.sqrt(Math.pow((bot.position.x + moveX) - obj.position.x, 2) + Math.pow((bot.position.z + moveZ) - obj.position.z, 2));
+                                    if (dist < obj.collisionRadius) {
+                                        blocked = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!blocked) {
+                                    bot.position.x += moveX;
+                                    bot.position.z += moveZ;
+                                } else {
+                                    // Engelle karşılaşınca anında yön değiştir
+                                    bot.direction += Math.PI / 2; 
+                                }
+
+                                // Haritadan dışarı çıkmayı engelle
+                                if (Math.abs(bot.position.x) > 60 || Math.abs(bot.position.z) > 60) {
+                                    bot.direction += Math.PI; // Geri dön
+                                }
+
+                                bot.position.y = 3 + Math.sin(t * 1.5 + bot.position.x) * 0.4;
+                                bot.rotation.y = bot.direction;
                             }
                         });
 
@@ -262,7 +304,7 @@
                 <div>
                     {loading && gameStarted && (
                         <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-slate-900 text-white text-2xl z-50">
-                            <div className="animate-pulse">Labirent ve Balıklar Yükleniyor...</div>
+                            <div className="animate-pulse">Harita ve Balıklar Yükleniyor...</div>
                         </div>
                     )}
                     
