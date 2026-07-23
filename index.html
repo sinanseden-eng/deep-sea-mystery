@@ -65,18 +65,11 @@
                 sunLight.castShadow = true;
                 scene.add(sunLight);
 
-                const floorGeo = new THREE.PlaneGeometry(200, 200);
-                const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a3b4a }); 
-                const floor = new THREE.Mesh(floorGeo, floorMat);
-                floor.rotation.x = -Math.PI / 2;
-                floor.receiveShadow = true;
-                floor.isFloor = true; 
-                scene.add(floor);
-                gameStateRef.current.solidObjects.push(floor);
+                // 3D ZEMİN (TABAKA) TAMAMEN KALDIRILDI!
+                // Artık balıklar ve objeler doğrudan arka plan resminin üzerinde duracak.
 
                 const loader = new THREE.GLTFLoader();
                 
-                // 1. BALIKLAR (models/ klasöründen yüklenir)
                 const fishModels = [
                     { path: 'models/Sinfish.glb', name: 'Sinfish' },
                     { path: 'models/Ninfish_3D.glb', name: 'Ninfish' },
@@ -87,7 +80,6 @@
                     { path: 'models/Mirfish_3D.glb', name: 'Mirfish' }
                 ];
 
-                // 2. ORTAM OBJELERİ (models/environment/ klasöründen yüklenir)
                 const envSpawnList = [
                     { name: 'temple_room.glb', x: 0, z: 0, scale: 3, radius: 0 },
                     { name: 'ship_hull.glb', x: -35, z: 10, scale: 3, radius: 0 },
@@ -299,7 +291,7 @@
 
             useEffect(() => {
                 if (gameStarted && timer > 0) {
-                    const interval = setInterval(() => setTimer(prev => prev - 1), 1000);
+                    const interval = setInterval(() => setTimer(prev => prev > 0 ? prev - 1 : 0), 1000);
                     return () => clearInterval(interval);
                 }
             }, [gameStarted, timer]);
